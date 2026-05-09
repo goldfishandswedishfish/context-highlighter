@@ -1,3 +1,17 @@
-.DS_Store
+# Dependencies
 node_modules/
+
+# System
+.DS_Store
 *.log
+
+# Personal highlight data — never commit this
+highlights/store.json
+highlights/index.md
+highlights/by-theme/
+highlights/by-agent/
+
+# Keep the folder structure but not the content
+!highlights/.gitkeep
+!highlights/by-theme/.gitkeep
+!highlights/by-agent/.gitkeep
