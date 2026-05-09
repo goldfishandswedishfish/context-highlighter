@@ -45,7 +45,16 @@ async function serverPost(path, body) {
     });
     return await res.json();
   } catch {
-    return { error: "Server not running. Start it with: cd server && node index.js" };
+    return { error: "Server not running" };
+  }
+}
+
+async function serverDelete(path) {
+  try {
+    const res = await fetch(`${SERVER}${path}`, { method: "DELETE" });
+    return await res.json();
+  } catch {
+    return { error: "Server not running" };
   }
 }
 
@@ -54,17 +63,22 @@ async function serverPost(path, body) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "GET_AGENTS") {
-    serverGet("/agents").then(agents => sendResponse(agents || []));
+    serverGet("/agents").then(r => sendResponse(r || []));
     return true;
   }
 
   if (message.type === "GET_THEMES") {
-    serverGet("/themes").then(themes => sendResponse(themes || []));
+    serverGet("/themes").then(r => sendResponse(r || []));
     return true;
   }
 
   if (message.type === "PING_SERVER") {
-    serverGet("/ping").then(res => sendResponse(res));
+    serverGet("/ping").then(r => sendResponse(r));
+    return true;
+  }
+
+  if (message.type === "GET_HIGHLIGHTS") {
+    serverGet("/highlights/raw").then(r => sendResponse(r || []));
     return true;
   }
 
@@ -75,11 +89,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       theme: message.theme || "Untagged",
       agent: message.agent || null,
       url: message.url,
-      conversationTitle: message.conversationTitle || "",
       createdAt: new Date().toISOString()
-    }).then(res => {
-      sendResponse(res);
+    }).then(r => {
+      sendResponse(r);
       chrome.runtime.sendMessage({ type: "HIGHLIGHTS_UPDATED" }).catch(() => {});
+    });
+    return true;
+  }
+
+  if (message.type === "UPDATE_HIGHLIGHT") {
+    serverPost("/highlight/update", message.highlight).then(r => {
+      sendResponse(r);
+      chrome.runtime.sendMessage({ type: "HIGHLIGHTS_UPDATED" }).catch(() => {});
+    });
+    return true;
+  }
+
+  if (message.type === "DELETE_HIGHLIGHT") {
+    serverDelete(`/highlight/${message.id}`).then(r => {
+      sendResponse(r);
+      chrome.runtime.sendMessage({ type: "HIGHLIGHTS_UPDATED" }).catch(() => {});
+    });
+    return true;
+  }
+
+  if (message.type === "CREATE_AGENT") {
+    serverPost("/agent", { name: message.name, description: message.description || "" }).then(r => {
+      sendResponse(r);
     });
     return true;
   }
