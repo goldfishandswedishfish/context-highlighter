@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    body {
+      width: 220px; padding: 16px;
+      background: #0a0a12; color: #e8d5b7;
+      font-family: Georgia, serif; text-align: center;
+    }
+    .logo { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+    p { font-size: 11.5px; color: #a89880; line-height: 1.6; margin-bottom: 14px; }
+    button {
+      width: 100%; padding: 8px; background: #e8d5b7; border: none;
+      border-radius: 8px; color: #0a0a12; font-family: Georgia, serif;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    button:hover { background: #f0e0c5; }
+  </style>
+</head>
+<body>
+  <div class="logo">📌 Claude Highlighter</div>
+  <p>Select any text in a Claude conversation to save it as a highlight.</p>
+  <button id="open-sidebar">Open Sidebar</button>
+  <script>
+    document.getElementById("open-sidebar").addEventListener("click", () => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        chrome.sidePanel.open({ tabId: tabs[0].id });
+        window.close();
+      });
+    });
+  </script>
+</body>
+</html>
