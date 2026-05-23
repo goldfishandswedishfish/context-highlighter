@@ -92,96 +92,102 @@ function createAgent(name, description) {
   return { success: true, slug, name };
 }
 
-loadStore();
+// Export pure utility functions for testing
+module.exports = { slugify, formatHighlightBlock, appendToMarkdown, deleteHighlightById, updateHighlight };
 
-const server = http.createServer((req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+// Only start the HTTP server when run directly (not required as a module)
+if (require.main === module) {
+  loadStore();
 
-  const url = new URL(req.url, `http://localhost:${PORT}`);
+  const server = http.createServer((req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
-  if (req.method === "GET" && url.pathname === "/ping") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", base: BASE }));
-    return;
-  }
+    const url = new URL(req.url, `http://localhost:${PORT}`);
 
-  if (req.method === "GET" && url.pathname === "/agents") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(getAgents()));
-    return;
-  }
+    if (req.method === "GET" && url.pathname === "/ping") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok", base: BASE }));
+      return;
+    }
 
-  if (req.method === "GET" && url.pathname === "/themes") {
-    const themeDir = path.join(BASE, "highlights", "by-theme");
-    const themes = fs.existsSync(themeDir) ? fs.readdirSync(themeDir).filter(f => f.endsWith(".md")).map(f => f.replace(".md", "")) : [];
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(themes));
-    return;
-  }
+    if (req.method === "GET" && url.pathname === "/agents") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(getAgents()));
+      return;
+    }
 
-  if (req.method === "GET" && url.pathname === "/highlights/raw") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(highlightStore));
-    return;
-  }
+    if (req.method === "GET" && url.pathname === "/themes") {
+      const themeDir = path.join(BASE, "highlights", "by-theme");
+      const themes = fs.existsSync(themeDir) ? fs.readdirSync(themeDir).filter(f => f.endsWith(".md")).map(f => f.replace(".md", "")) : [];
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(themes));
+      return;
+    }
 
-  if (req.method === "POST" && url.pathname === "/highlight") {
-    let body = "";
-    req.on("data", chunk => body += chunk);
-    req.on("end", () => {
-      try {
-        const h = JSON.parse(body);
-        h.createdAt = h.createdAt || new Date().toISOString();
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(saveHighlight(h)));
-      } catch(e) { res.writeHead(400); res.end(JSON.stringify({ error: e.message })); }
-    });
-    return;
-  }
+    if (req.method === "GET" && url.pathname === "/highlights/raw") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(highlightStore));
+      return;
+    }
 
-  if (req.method === "POST" && url.pathname === "/highlight/update") {
-    let body = "";
-    req.on("data", chunk => body += chunk);
-    req.on("end", () => {
-      try {
-        const updated = JSON.parse(body);
-        updateHighlight(updated);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ success: true }));
-      } catch(e) { res.writeHead(400); res.end(JSON.stringify({ error: e.message })); }
-    });
-    return;
-  }
+    if (req.method === "POST" && url.pathname === "/highlight") {
+      let body = "";
+      req.on("data", chunk => body += chunk);
+      req.on("end", () => {
+        try {
+          const h = JSON.parse(body);
+          h.createdAt = h.createdAt || new Date().toISOString();
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(saveHighlight(h)));
+        } catch(e) { res.writeHead(400); res.end(JSON.stringify({ error: e.message })); }
+      });
+      return;
+    }
 
-  if (req.method === "POST" && url.pathname === "/agent") {
-    let body = "";
-    req.on("data", chunk => body += chunk);
-    req.on("end", () => {
-      try {
-        const { name, description } = JSON.parse(body);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(createAgent(name, description)));
-      } catch(e) { res.writeHead(400); res.end(JSON.stringify({ error: e.message })); }
-    });
-    return;
-  }
+    if (req.method === "POST" && url.pathname === "/highlight/update") {
+      let body = "";
+      req.on("data", chunk => body += chunk);
+      req.on("end", () => {
+        try {
+          const updated = JSON.parse(body);
+          updateHighlight(updated);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true }));
+        } catch(e) { res.writeHead(400); res.end(JSON.stringify({ error: e.message })); }
+      });
+      return;
+    }
 
-  if (req.method === "DELETE" && url.pathname.startsWith("/highlight/")) {
-    const id = url.pathname.split("/").pop();
-    deleteHighlightById(id);
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ success: true }));
-    return;
-  }
+    if (req.method === "POST" && url.pathname === "/agent") {
+      let body = "";
+      req.on("data", chunk => body += chunk);
+      req.on("end", () => {
+        try {
+          const { name, description } = JSON.parse(body);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(createAgent(name, description)));
+        } catch(e) { res.writeHead(400); res.end(JSON.stringify({ error: e.message })); }
+      });
+      return;
+    }
 
-  res.writeHead(404); res.end("Not found");
-});
+    if (req.method === "DELETE" && url.pathname.startsWith("/highlight/")) {
+      const id = url.pathname.split("/").pop();
+      deleteHighlightById(id);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true }));
+      return;
+    }
 
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`\n✦ Context Highlighter server running`);
-  console.log(`  http://localhost:${PORT}`);
-  console.log(`  Knowledge base: ${BASE}\n`);
-});
+    res.writeHead(404); res.end("Not found");
+  });
+
+  server.listen(PORT, "127.0.0.1", () => {
+    console.log(`\n✦ Context Highlighter server running`);
+    console.log(`  http://localhost:${PORT}`);
+    console.log(`  Knowledge base: ${BASE}\n`);
+  });
+}
