@@ -25,6 +25,37 @@ chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ tabId: tab.id });
 });
 
+// ── Local storage helpers (for page re-application) ──
+
+function saveToLocalStorage(url, entry) {
+  chrome.storage.local.get("ch_highlights_by_url", (data) => {
+    const byUrl = data.ch_highlights_by_url || {};
+    if (!byUrl[url]) byUrl[url] = [];
+    byUrl[url].push(entry);
+    chrome.storage.local.set({ ch_highlights_by_url: byUrl });
+  });
+}
+
+function removeFromLocalStorage(id) {
+  chrome.storage.local.get("ch_highlights_by_url", (data) => {
+    const byUrl = data.ch_highlights_by_url || {};
+    for (const url of Object.keys(byUrl)) {
+      byUrl[url] = byUrl[url].filter(h => h.id !== id);
+    }
+    chrome.storage.local.set({ ch_highlights_by_url: byUrl });
+  });
+}
+
+function updateInLocalStorage(id, text, theme) {
+  chrome.storage.local.get("ch_highlights_by_url", (data) => {
+    const byUrl = data.ch_highlights_by_url || {};
+    for (const url of Object.keys(byUrl)) {
+      byUrl[url] = byUrl[url].map(h => h.id === id ? { ...h, text, theme } : h);
+    }
+    chrome.storage.local.set({ ch_highlights_by_url: byUrl });
+  });
+}
+
 // ── Server communication ──────────────────────────────
 
 async function serverGet(path) {
@@ -62,6 +93,14 @@ async function serverDelete(path) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
+  if (message.type === "GET_PAGE_HIGHLIGHTS") {
+    chrome.storage.local.get("ch_highlights_by_url", (data) => {
+      const byUrl = data.ch_highlights_by_url || {};
+      sendResponse(byUrl[message.url] || []);
+    });
+    return true;
+  }
+
   if (message.type === "GET_AGENTS") {
     serverGet("/agents").then(r => sendResponse(r || []));
     return true;
@@ -90,8 +129,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       agent: message.agent || null,
       url: message.url,
       createdAt: new Date().toISOString()
-    }).then(r => {
-      sendResponse(r);
+    }).then(result => {
+      if (!result?.error) {
+        const id = result?.id || `local_${Date.now()}`;
+        saveToLocalStorage(message.url, { id, text: message.text, theme: message.theme || "Untagged" });
+        sendResponse({ ...result, id });
+      } else {
+        sendResponse(result);
+      }
       chrome.runtime.sendMessage({ type: "HIGHLIGHTS_UPDATED" }).catch(() => {});
     });
     return true;
@@ -99,6 +144,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "UPDATE_HIGHLIGHT") {
     serverPost("/highlight/update", message.highlight).then(r => {
+      if (!r?.error) {
+        updateInLocalStorage(message.highlight.id, message.highlight.text, message.highlight.theme);
+      }
       sendResponse(r);
       chrome.runtime.sendMessage({ type: "HIGHLIGHTS_UPDATED" }).catch(() => {});
     });
@@ -107,6 +155,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "DELETE_HIGHLIGHT") {
     serverDelete(`/highlight/${message.id}`).then(r => {
+      if (!r?.error) {
+        removeFromLocalStorage(message.id);
+      }
       sendResponse(r);
       chrome.runtime.sendMessage({ type: "HIGHLIGHTS_UPDATED" }).catch(() => {});
     });

@@ -135,10 +135,11 @@ function saveHighlight() {
   if (!currentSelection) return;
   const note = saveModal.querySelector("#ch-note").value.trim();
   const theme = saveModal.querySelector("#ch-theme-input").value.trim() || "Untagged";
+  const savedText = currentSelection.text;
 
   chrome.runtime.sendMessage({
     type: "SAVE_HIGHLIGHT",
-    text: currentSelection.text,
+    text: savedText,
     note,
     theme,
     agent: selectedAgent,
@@ -149,6 +150,7 @@ function saveHighlight() {
       saveModal.querySelector("#ch-server-warning").style.display = "block";
       return;
     }
+    applyHighlightMark(savedText, res.id);
     closeModal();
     showToast(selectedAgent ? `Saved & routed to ${selectedAgent}` : "Highlight saved");
   });
@@ -191,3 +193,73 @@ chrome.runtime.onMessage.addListener((message) => {
     openSaveModal(currentSelection);
   }
 });
+
+// ── Page highlight marking ────────────────────────────
+
+function applyHighlightMark(text, id) {
+  if (!text || !text.trim()) return;
+  const searchText = text.trim();
+
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const tag = node.parentElement?.tagName;
+      if (tag && ["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT"].includes(tag)) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      if (node.parentElement?.closest(".ch-highlight")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+
+  const positions = [];
+  let combined = "";
+  let node;
+  while ((node = walker.nextNode())) {
+    positions.push({ node, start: combined.length });
+    combined += node.textContent;
+  }
+
+  const idx = combined.indexOf(searchText);
+  if (idx === -1) return;
+  const end = idx + searchText.length;
+
+  const range = document.createRange();
+  let startSet = false;
+
+  for (const { node: n, start } of positions) {
+    const nodeEnd = start + n.textContent.length;
+    if (!startSet && idx >= start && idx < nodeEnd) {
+      range.setStart(n, idx - start);
+      startSet = true;
+    }
+    if (startSet && end <= nodeEnd) {
+      range.setEnd(n, end - start);
+      break;
+    }
+  }
+
+  if (!startSet) return;
+
+  try {
+    const mark = document.createElement("mark");
+    mark.className = "ch-highlight";
+    mark.dataset.chId = id || "";
+    mark.appendChild(range.extractContents());
+    range.insertNode(mark);
+  } catch (_) {
+    // DOM structure (e.g. cross-element range) prevented wrapping — silently skip
+  }
+}
+
+function loadAndApplyHighlights() {
+  chrome.runtime.sendMessage({ type: "GET_PAGE_HIGHLIGHTS", url: window.location.href }, (highlights) => {
+    if (!highlights || !highlights.length) return;
+    highlights.forEach(h => applyHighlightMark(h.text, h.id));
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", loadAndApplyHighlights);
+} else {
+  loadAndApplyHighlights();
+}

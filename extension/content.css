@@ -88,3 +88,18 @@
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
 }
 .ch-toast.visible { opacity: 1; transform: translateY(0); }
+
+.ch-highlight {
+  display: inline;
+  background: rgba(232, 213, 183, 0.35);
+  color: inherit;
+  border-radius: 2px;
+  padding: 1px 0;
+  cursor: default;
+  transition: background 0.2s;
+}
+.ch-highlight:hover {
+  background: rgba(232, 213, 183, 0.6);
+  outline: 1px solid rgba(232, 213, 183, 0.5);
+  outline-offset: 1px;
+}
